@@ -1,0 +1,229 @@
+---
+title: "COVID19 Report"
+output:
+  html_document: default
+  pdf_document: default
+date: "2024-03-02"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+
+Covid-19 was an event that affect billions of people throughout the globe. However, compared to other large-scale pandemics in the past, we now have the benefit of technology to aid in our tracking and reporting of the pandemic. As a result, information on how the disease was spreading became widely reported and visible.
+
+This data we have is the result of that global reporting effort. We will dive into that now.
+
+## Reading CSV Data In
+
+Reading in the 4 CSV files from the https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/ website into four different variables which are data frames.
+```{r, echo=FALSE, show_col_types = FALSE}
+library(tidyr)
+library(tidyverse)
+
+confirmed_US_cases_df <- read_csv("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_US.csv")
+
+confirmed_Global_cases_df <- read_csv("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_global.csv")
+
+confirmed_US_deaths_df <- read_csv("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_deaths_US.csv")
+
+confirmed_Global_deaths_df <- read_csv("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_deaths_global.csv")
+```
+## About the Data
+
+The data we are given is of two general varieties, cases of COVID-19 from 2021-2023 and deaths from COVID-19 from 2021-2023.
+
+There are 4 data tables in total, 2 tables are about cases of COVID-19 with 1 covering the US only, broken down by county, and the other covering the cases of COVID-19 from reporting countries or states/provinces in that country. 
+
+The other 2 tables are in the same format, but cover deaths from COVID-19.
+
+It is worth noting that the cases and deaths are both cumulative so the number can only increase from day to day and is not a count of new cases/deaths.
+
+Interestingly enough, the data also contains cases from the 2020 Tokyo Olympics.
+
+# Visualization 1
+
+## Tidying and transforming data for Visualization 1
+
+For the first visualization, we take the Global Cases and Global Deaths data frames.
+
+First we remove the columns that are not needed for our visualization which are the "Province/State", "Lat", and "Long" columns.
+
+We then rename the first column as "Country" as the '/' in "Country/Region" can cause some errors when declaring or fetching that column.
+
+We also read in the tidyr and tidyverse library packages.
+```{r}
+library(tidyr)
+library(tidyverse)
+
+confirmed_Global_cases_df <- subset(confirmed_Global_cases_df, select = -c(1, 3, 4)) 
+
+confirmed_Global_deaths_df <- subset(confirmed_Global_deaths_df, select = -c(1, 3, 4)) 
+
+colnames(confirmed_Global_cases_df)[1] = "Country"
+
+colnames(confirmed_Global_deaths_df)[1] = "Country"
+
+```
+
+## Summing Data 
+We then summarize the many rows that some countries may have from separate states or provinces. This makes it so each country only has one row.
+
+```{r}
+global_cases_summarized <- confirmed_Global_cases_df %>%
+  group_by(Country) %>%
+  summarise(across(where(is.numeric), sum, na.rm = TRUE))
+
+global_deaths_summarized <- confirmed_Global_deaths_df %>%
+  group_by(Country) %>%
+  summarise(across(where(is.numeric), sum, na.rm = TRUE))
+```
+
+## Pivoting Data
+
+Due to both data sets having the dates run along the x-axis, we pivot the table to have them now run on the y-axis to make it more readable.
+
+We also add the 'Date' and 'Number' Columns to better label the data.
+
+```{r}
+cases_data_long <- pivot_longer(global_cases_summarized, cols = -Country, names_to = "Date", values_to = "Number")
+cases_data_long$Date <- as.Date(cases_data_long$Date, format = "%m/%d/%y")
+
+deaths_data_long <- pivot_longer(global_deaths_summarized, cols = -Country, names_to = "Date", values_to = "Number")
+deaths_data_long$Date <- as.Date(deaths_data_long$Date, format = "%m/%d/%y")
+```
+
+## Further Cleaning and Compacting
+
+To further summarize the data, we remove the countries column and only look at the date as our summary statistic.
+
+As a result, we have both the reported cases and deaths across the globe for each day.
+
+```{r}
+cases_data_long <- subset(cases_data_long, select = -c(1))
+
+cases_data_long_final <- cases_data_long %>%
+  group_by(Date) %>%
+  summarise(across(where(is.numeric), sum, na.rm = TRUE))
+
+deaths_data_long <- subset(deaths_data_long, select = -c(1))
+
+deaths_data_long_final <- deaths_data_long %>%
+  group_by(Date) %>%
+  summarise(across(where(is.numeric), sum, na.rm = TRUE))
+```
+
+## Plot 1 
+
+We have now created a visualization which shows the cumulative number of deaths and cases globally from 2021-2023.
+
+Due to the large values of cases compared to deaths, I felt a log scale would be more appropriate for actually visualizing the data as you can now generally see the shapes of the data compared to the non-log scale chart.
+
+From the plot, we can see that cases dwarfs deaths by a great margin, hence why I used the log scale. 
+
+When looking at the log scale graph, we can see that the cases and deaths generally follow the same shape and trend which would make sense as periods of increasing cases would generally mean increasing deaths.
+
+```{r}
+
+ggplot() +
+  geom_line(data = cases_data_long_final, aes(x = Date, y = Number, color = "Cases")) +
+  geom_line(data = deaths_data_long_final, aes(x = Date, y = Number, color = "Deaths")) +
+  labs(x = "Date", y = "Number of Cases") +
+  ggtitle("Cumulative Number of Deaths and Cases Globally") +
+  theme(plot.title = element_text(color = 'blue', size = 14, face = "bold.italic")) +
+  scale_color_manual(name = "Legend", values = c("Cases" = "darkblue", "Deaths" = "red"))
+
+
+ggplot() +
+  geom_line(data = cases_data_long_final, aes(x = Date, y = Number, color = "Cases")) +
+  geom_line(data = deaths_data_long_final, aes(x = Date, y = Number, color = "Deaths")) +
+  labs(x = "Date", y = "Number of Cases (Log Scale)") +
+  ggtitle("Cumulative Number of Deaths and Cases Globally (Log Scale)") +
+  theme(plot.title = element_text(color = 'blue', size = 14, face = "bold.italic")) +
+  scale_color_manual(name = "Legend", values = c("Cases" = "darkblue", "Deaths" = "red")) +
+  scale_y_log10() 
+
+```
+# Visualization 2
+
+## Tidying and transforming data for Visualization 2
+
+For our second visualization, we take the confirmed US cases data frame.
+
+We remove many of the location based columns as they are not going to be used in our analysis.
+
+The 'Country/State' column is renamed to 'Country_State' for reasons listed above.
+
+We also only filter for Dane County, Wisconsin. The reason I chose this is that Dane County contains the city of Madison and the University of Wisconsin-Madison, where I did my undergraduate (during the pandemic too!).
+
+```{r}
+Dane_Only_df <- subset(confirmed_US_cases_df, select = -c(1,2,3,4,5,6,7,8,9,10))
+colnames(Dane_Only_df)[1] = "County_State"
+Dane_Only_df <- Dane_Only_df[Dane_Only_df$County_State == 'Dane, Wisconsin, US',]
+```
+
+## Further Tidying
+
+We then pivot the table like we did for the previous visualization along with changing the date format to make it more readable.
+
+```{r}
+Dane_Only_df_t <- pivot_longer(Dane_Only_df, cols = -County_State, names_to = "Date", values_to = "Number")
+Dane_Only_df_t$Date <- as.Date(Dane_Only_df_t$Date, format = "%m/%d/%y")
+```
+
+## Attaching and adding a model
+
+After creating a column for the date column in numeric terms, we then get a linear model to the data based on the count of cases and the date to get a prediction of cases per day .
+
+Afterwards, we then attach that model to the data to get the predicted cases per day.
+```{r}
+Dane_Only_df_t$Date_Numeric <- as.numeric((Dane_Only_df_t$Date))
+mod = lm(Number ~ Date_Numeric,data = Dane_Only_df_t)
+Dane_Only_df_t = Dane_Only_df_t %>% mutate(pred=predict(mod))
+```
+ 
+## Plot 2
+
+For our second visualization, we graph the total cases across Dane County and using the predicted column we calculated previously, graph the actual data compared to the predicted values.
+
+
+As we can tell from the data, that cases in Dane County rise in differing degrees of velocity, owing to the variants that were spreading the disease much faster in certain points. It appears as though our predicted model does a decent job of predicting this data as the general fluctuations in cases do make the model work well to a degree with some areas of over and under estimating.
+
+```{r}
+ggplot(Dane_Only_df_t) + 
+  geom_point(aes(x = Date, y = Number, color = "Actual")) +
+  geom_point(aes(x = Date, y = pred, color = "Predicted")) +
+  xlab('Date') +
+  ylab('Total Number of Cases') + 
+  ggtitle("Total Cases in Dane County with Linear Model") +
+  theme(plot.title = element_text(color = 'blue', size = 14, face = "bold.italic")) +
+  scale_color_manual(values = c("Actual" = "black", "Predicted" = "red"),
+                     labels = c("Actual", "Predicted")) +
+  labs(color = "Data Types")+
+  scale_y_continuous(limits = c(0, 200000))
+```
+
+
+## Bias Sources
+
+When examining sources of bias, there are a few potential areas where this can come into play.
+
+First when looking at the cases and death reported values, the method of how deaths and cases are reported to these agencies is open to bias as it is possible that some cases and deaths of Covid-19 were either falsely reported or not reported at all. The reliability of either of these cases is unknown so this data may not represent what actually was happening. 
+
+In addition, reporting mechanisms do vary from country to country as each country may have differences in how they report compared to another country. This may lead to over or under representation of Covid-19 in some areas.
+
+For example, one country that has a very comprehensive and through reporting system may report that 8% of it's residents have had Covid-19. Another country with similar population who has less rigorous and less reporting mechanisms may report that only 2% of it's residents have Covid-19 when in reality that number is much higher. As a result, one might look at the country with 8% Covid-19 and think they are much more infected than the 2% country when this may not be the case.
+
+## Conclusion
+
+Compared to the NYPD crime data, I felt that this data set had much more areas to work with.
+
+I enjoy working with time-series data so having a wealth of this type of data was very interesting to work with. 
+
+As we can tell from my analysis we can see that Covid-19 impacted the world at a massive scale, from the global level down to a single county. 
+
+The total number of cases by 2023 of 675 million is a staggering number as that is nearly twice the population of the United States. 
+
+While we may never know the full number of cases and deaths due directly to Covid-19, we can see from the visualizations that it affected a large number of people and left a lasting impact across the globe.
