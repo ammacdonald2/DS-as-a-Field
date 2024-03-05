@@ -1,0 +1,125 @@
+---
+title: "NYPD Crime Data"
+output:
+  html_document: default
+  pdf_document: default
+date: "2024-02-14"
+---
+
+
+## Introduction
+
+New York City is one of the largest cities in the world with nearly 8.4 million people in the surrounding area.
+
+The New York Police Department or NYPD is tasked with policing this city and as of 2006, have been keeping records of crimes and making that data available to the public. 
+
+We will dive into that report now to see various statistics and visualizations about this data. 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Reading Data In
+
+Reading in the CSV file from the https://data.cityofnewyork.us/api/views/833y-fsy8/rows.csv website into the 'url_in' variable
+```{r}
+url_in <- ("https://data.cityofnewyork.us/api/views/833y-fsy8/rows.csv")
+```
+
+## Loading CSV and tidying and transforming data
+
+Reading in the url into a table called 'NYPD_Crime_Data'
+
+Then creating a second dataframe called 'NYPD_Crime_Data_Cleaned' which has certain columns that won't be used removed
+
+Then we add on a column to the 'NYPD_Crime_Data_Cleaned' dataframe called "Year' which isolates the year from the 'OCCUR_DATE' column
+
+```{r}
+library(tidyr)
+library(tidyverse)
+NYPD_Crime_Data <- read_csv(url_in)
+
+NYPD_Crime_Data_Cleaned <- subset(NYPD_Crime_Data, select = -c(X_COORD_CD,Y_COORD_CD, Latitude, Longitude, Lon_Lat)) 
+
+NYPD_Crime_Data_Cleaned$Year <- format(as.Date(NYPD_Crime_Data_Cleaned$OCCUR_DATE, format="%m/%d/%Y"),"%Y")
+```
+## About the Data
+
+The data we have given to us is a database of crimes that occurred in the New York City area from 2006-2021. It contains various details of the crime like occurrence time, occurrence date, borough, perpetrator age, and coordinates among other statistics. 
+
+I decided to drop the latitude, longitude, and coordinate data as I felt there was no good way for me to incorporate them into my report. These columns are quite long and and very hard to interpret without using a map. I also added the a column called 'Year' which is simply what year the crime occurred.
+
+## Visualization 1
+
+Create a visualization which has a box plot for what time crimes occurred in the separate boroughs ('BORO')
+
+Each of the boroughs have their own colors.
+
+From the data, we can see that most crimes happened in the afternoon/evening
+
+```{r}
+ggplot(NYPD_Crime_Data_Cleaned, aes(x=BORO, y=OCCUR_TIME, fill = BORO)) + 
+  geom_boxplot() +
+  xlab('Borough') +
+  ylab('Crime Occurrence Time') + 
+  ggtitle("Crime Occurrence Time by Borough") +
+  theme(plot.title = element_text(color= '#33FF71', size=14, face="bold.italic")) +
+  labs(fill = "Borough")
+```
+
+## Further Partioning
+
+We then create a separate data table called 'Year_Only' which takes the data from the 'Year' column which we previously appended.
+
+We then get the count of each year to get the total number of reported crimes per year
+```{r}
+Year_Only <- select(NYPD_Crime_Data_Cleaned, Year)
+Year_Only <- Year_Only %>% group_by(Year)
+Year_Only <- Year_Only %>% summarise(n = n())
+```
+
+## Attaching and adding a model
+
+We then get a model to the data based on the count of crimes and the year to get a prediction of crimes per year after casting the year column to a numeric column
+
+Afterwards, we then attach that model to the data to get the predicted crimes per year
+```{r}
+Year_Only$Year <- as.numeric(as.character(Year_Only$Year))
+mod = lm(n ~ Year,data = Year_Only)
+Year_Only = Year_Only %>% mutate(pred=predict(mod))
+```
+ 
+## Visualization 2
+
+For our second visualization, we graph the total crimes across all the boroughs per year and using the predicted column we calculated previously, graph the actual data compared to the predicted values
+
+
+As we can tell from the data, it appears that the crimes do in fact drop over time and the predicted values also do echo this fact. However, in 2020, the crimes do appear to pick up again.
+```{r}
+ggplot(Year_Only) + 
+  geom_point(aes(x = Year, y = n, color = "Actual")) +
+  geom_point(aes(x = Year, y = pred, color = "Predicted")) +
+  xlab('Year') +
+  ylab('Total Crimes') + 
+  ggtitle("Total Crimes per Year") +
+  theme(plot.title = element_text(color = 'blue', size = 14, face = "bold.italic")) +
+  scale_color_manual(values = c("Actual" = "black", "Predicted" = "red"),
+                     labels = c("Actual", "Predicted")) +
+  labs(color = "Data Types")
+```
+
+
+## Bias Sources
+
+When examining sources of bias, there are a few potential areas where this can come into play.
+
+First, when looking at the source data, it is possible that the data for 'crimes occurred' can be highly subjective based in the presence of police. For example, not every crime that occurs in New York is captured. If one area happens to have more police than another area of comparable crime levels but has a larger police presence, more crimes will be reported in that area, making it seem like more crimes occur in that area when it is really equal in terms of crimes.
+
+Looking at some of my visualizations, the "Crime Occurrence Time by Borough" graph is vulnerable to bias due to how these certain boroughs are comprised. For example, a borough that has more commercial buildings is likely to have crimes occur at different hours than one that is more residential and has more people in it during the normal non-work hours.
+
+## Conclusion
+
+I found this data set very versatile as there were a lot of different fields that each could be used in their own way. In the end, I decided to go the route of summarized and grouped visualizations as I felt that comparing between groups makes the visualizations easy to understand. I felt the time of crime between the different boroughs was especially interesting as I have always thought of New York as one homogeneous place so being able to see even small differences between boroughs was quite interesting and sparked questions of my own. 
+
+However, this data does also need to be viewed very carefully while accounting for sources of bias, especially with crime data. 
+
+Overall I felt this was a very interesting assignment as the data was very expansive and multi-dimensional that I am sure allowed for many different visualizations and analysis.
